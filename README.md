@@ -2,7 +2,7 @@
 ![alm-code-shell](https://img.shields.io/badge/code-shell-yellow.svg)
 [![alm-license](http://img.shields.io/badge/license-MIT+-blue.svg)](https://github.com/JayBrown/Application-Launch-Monitor-ALM-/blob/master/LICENSE)
 
-# ALM – Application Launch Monitor (shell script version) <img src="https://github.com/JayBrown/Application-Launch-Monitor-ALM-/blob/master/img/jb-img.png" height="20px"/>
+# ALM – Application Launch Monitor <img src="https://github.com/JayBrown/Application-Launch-Monitor-ALM-/blob/master/img/jb-img.png" height="20px"/>
 
 **ALM is a small Objective-C `NSWorkspace` listener combined with a (bigger) shell script; it extends macOS Gatekeeper protection by monitoring and intercepting every application launch, while re-evaluating the application's security and integrity.**
 
