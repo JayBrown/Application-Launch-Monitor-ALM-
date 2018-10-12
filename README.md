@@ -40,8 +40,8 @@ To initially scan application bundles after download or installation, you can al
 * Clone repository & `cd` into repo
 * `gcc -Wall almon.m -o almon -lobjc -framework Cocoa`
   * alternative: use prebuilt CLI `almon` (built with Xcode 10 on macOS 10.13.6)
-* `sudo chown root:wheel almon && sudo chmod +ux almon && ln -s almon /usr/local/bin/almon`
-* `sudo chown root:wheel almonwatch && sudo chmod +ux almonwatch && ln -s almonwatch /usr/local/bin/almonwatch`
+* `cp almon /usr/local/bin/almon && sudo chown root:wheel /usr/local/bin/almon && sudo chmod +ux /usr/local/bin/almon`
+* `cp almonwatch /usr/local/bin/almonwatch && sudo chown root:wheel /usr/local/bin/almonwatch && sudo chmod +ux /usr/local/bin/almonwatch`
 * `sudo cp local.lcars.ALM.plist /Library/LaunchDaemons/local.lcars.ALM.plist`
 * `sudo chown root:wheel /Library/LaunchDaemons/local.lcars.ALM.plist`
 * `sudo launchctl load /Library/LaunchDameons/local.lcars.ALM.plist`
