@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# version 1.0
+
+export LANG=en_US.UTF-8
+export PATH=$PATH:/usr/local/bin
+
+echo "******************"
+echo "*** ALM Helper ***"
+echo "******************"
+localdate=$(date)
+echo "Local date: $localdate"
+
+almstatus=$(launchctl list | awk '/local.lcars.ALM$/{print $1}')
+if ! [[ $almstatus ]] ; then
+	echo "ALM not loaded: loading now..."
+	launchctl load /Library/LaunchDaemons/local.lcars.ALM.plist
+else
+	if [[ $almstatus != "-" ]] ; then
+		echo "ALM already running."
+		echo "Exiting..."
+		exit
+	fi
+fi
+
+while true
+do
+	whoinfo=$(who | grep "console")
+	if [[ $whoinfo ]] ; then
+		loggeduser=$(echo "$whoinfo" | awk '{print $1}')
+		echo "Logged user detected: $loggeduser"
+		sleep 1
+		break
+	fi
+	sleep 1
+done
+
+almstatus=$(launchctl list | awk '/local.lcars.ALM$/{print $1}')
+if ! [[ $almstatus ]] ; then
+	echo "ALM not loaded: loading & starting now..."
+	launchctl load /Library/LaunchDaemons/local.lcars.ALM.plist && launchctl start local.lcars.ALM
+else
+	if [[ $almstatus == "-" ]] ; then
+		echo "ALM already loaded: starting now..."
+		launchctl start local.lcars.ALM
+	fi
+fi
+
+echo "*** Exiting until respawn... ***"
+exit

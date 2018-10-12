@@ -8,8 +8,6 @@
 
 **ALM** is still in beta, so there will surely be some erros or bugs, and it will have to undergo a lot of testing before any final release. Testing is currently done on macOS High Sierra (10.13.6), and will continue on Mojave later in 2018.
 
-**Important note: ALM** is a LaunchDaemon, and it currently seems to load too early during boot, so it doesn't work as expected, until you manually unload and reload it; this will need to be fixed.
-
 Background: Reed T. Talk at *Virus Bulletin 2018*. Malwarebytes. 3 October 2018. Montreal. In: Seals T. 2018. ["Virus Bulletin 2018: macOS Flaw Allows Attackers to Hijack Installed Apps"](https://threatpost.com/virus-bulletin-2018-macos-flaw-allows-attackers-to-hijack-installed-apps/137942/). *Threatpost: Security News Service*. 3 October 2018. Woburn.
 
 > The way Apple handles [the Gatekeeper] process has a hole in it. Apps are essentially quarantined when they're downloaded by a Mac user; any executable is given an initial caution flag. The system then checks the code signature, and makes sure the application is not a known piece of malware. If it passes, the app is given clearance on the machine as a piece of trusted software. That's where the issue lies. At that point, macOS stops checking that application, once the quarantine flag is wiped out. […] That means that malefactors can infect almost any application already running on the machine […].
@@ -44,9 +42,13 @@ To initially scan application bundles after download or installation, you can al
   * alternative: use prebuilt CLI `almon` (built with Xcode 10 on macOS 10.13.6)
 * `cp almon /usr/local/bin/almon && sudo chown root:wheel /usr/local/bin/almon && sudo chmod +ux /usr/local/bin/almon`
 * `cp almonwatch /usr/local/bin/almonwatch && sudo chown root:wheel /usr/local/bin/almonwatch && sudo chmod +ux /usr/local/bin/almonwatch`
+* `cp almhelper /usr/local/bin/almhelper && sudo chown root:wheel /usr/local/bin/almhelper && sudo chmod +ux /usr/local/bin/almhelper`
 * `sudo cp local.lcars.ALM.plist /Library/LaunchDaemons/local.lcars.ALM.plist`
+* `sudo cp local.lcars.ALMHelper.plist /Library/LaunchDaemons/local.lcars.ALMHelper.plist`
 * `sudo chown root:wheel /Library/LaunchDaemons/local.lcars.ALM.plist`
+* `sudo chown root:wheel /Library/LaunchDaemons/local.lcars.ALMHelper.plist`
 * `sudo launchctl load /Library/LaunchDameons/local.lcars.ALM.plist`
+* `sudo launchctl load /Library/LaunchDaemons/local.lcars.ALMHelper.plist` (this will automatically start ALM)
 
 Please note that when building `almon` with **Xcode 10** or the associated **Developer Tools** on High Sierra, you will probably run into `ld` warnings; you can safely ignore them.
 
@@ -68,10 +70,12 @@ Remove applications from the ALM whitelist by executing
 Please note that blacklisting does not work with applications that have been auto-whitelisted; they will be auto-whitelisted again at their next launch.
 
 ## Uninstall
+* `sudo launchctl unload local.lcars.ALMHelper`
 * `sudo launchctl unload local.lcars.ALM`
 * `sudo killall almon`
 * `sudo killall almonwatch`
-* `sudo rm -f /Library/LaunchDaemons/local.lcars.ALM.plist /usr/local/bin/almon /usr/local/bin/almonwatch`
+* `sudo killall almhelper`
+* `sudo rm -f /Library/LaunchDaemons/local.lcars.ALMHelper.plist /Library/LaunchDaemons/local.lcars.ALM.plist /usr/local/bin/almon /usr/local/bin/almonwatch /usr/local/bin/almhelper`
 * `sudo rm -rf /Library/Application\ Support/ALM`
 
 ## Beta status
