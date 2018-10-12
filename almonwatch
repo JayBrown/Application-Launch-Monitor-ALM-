@@ -602,10 +602,10 @@ _almonwatch () {
 					fi
 				fi
 			else
+				_whitelist add
 				echo "$appname: no issues"
 				_notify "✅ Verified" "$appname"
 				kill -s CONT $pid && _frontmost "$appname"
-				_whitelist add
 				if ! $hashchange ; then
 					bash -c '"$supportdir"/bin/run "$notification:::1:::samehash"' 2>/dev/null &
 				else

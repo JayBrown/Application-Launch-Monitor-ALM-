@@ -6,7 +6,7 @@
 
 **ALM is a small Objective-C `NSWorkspace` listener combined with a (bigger) shell script; it extends macOS Gatekeeper protection by monitoring and intercepting every application launch, while re-evaluating the application's security and integrity.**
 
-**ALM** is still in beta, so there will surely be some erros or bugs, and it will have to undergo a lot of testing before any final release. Testing is currently done on macOS High Sierra (10.13.6), and will continue on Mojave later in 2018.
+**ALM** is still in beta, so there will surely be some errors or bugs, and it will have to undergo a lot of testing before any final release. Testing is currently done on macOS High Sierra (10.13.6), and will continue on Mojave later in 2018.
 
 Background: Reed T. Talk at *Virus Bulletin 2018*. Malwarebytes. 3 October 2018. Montreal. In: Seals T. 2018. ["Virus Bulletin 2018: macOS Flaw Allows Attackers to Hijack Installed Apps"](https://threatpost.com/virus-bulletin-2018-macos-flaw-allows-attackers-to-hijack-installed-apps/137942/). *Threatpost: Security News Service*. 3 October 2018. Woburn.
 
