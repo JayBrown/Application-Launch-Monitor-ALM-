@@ -1,0 +1,623 @@
+#!/bin/bash
+
+# almonwatch
+# version 1.0 beta 2
+
+# set -x
+# PS4=':$LINENO+'
+
+export LANG=en_US.UTF-8
+export PATH=$PATH:/usr/local/bin
+
+if [[ $(id -u) != 0 ]] ; then
+	echo "Error: $0 needs to be run as root!" >&2
+	exit
+fi
+
+supportdir="/Library/Application Support/ALM"
+dbloc="$supportdir/alm.db"
+
+if [[ $1 == "blacklist" ]] ; then
+	if ! [[ -f "$dbloc" ]] ; then
+		echo "Error: database does not exist!" >&2
+		exit
+	fi
+	shift
+	if [[ $1 == "path" ]] ; then
+		shift
+		sqlite3 "$dbloc" "delete from ALM where path=\"$@\";" 2>/dev/null && echo "Success: blacklisted $2" || echo "Error blacklisting $2" >&2
+	elif [[ $1 == "id" ]] ; then
+		shift
+		sqlite3 "$dbloc" "delete from ALM where cfbid=\"$2\";" 2>/dev/null && echo "Success: blacklisted $2" || echo "Error blacklisting $2" >&2
+	elif [[ $1 == "name" ]] ; then
+		shift
+		sqlite3 "$dbloc" "delete from ALM where name=\"$@\";" 2>/dev/null && echo "Success: blacklisted $@" || echo "Error blacklisting $@" >&2
+	else
+		echo "Error: wrong option - use 'path', 'name', or 'id'" >&2
+	fi
+	exit
+fi
+
+echo "************************************************"
+echo "*** Application Launch Monitor (ALM) Watcher ***"
+echo "************************************************"
+localdate=$(date)
+echo "Local date: $localdate"
+
+account=$(id -un)
+process="Application Launch Monitor"
+
+# beep function
+_beep () {
+	osascript -e "beep"
+}
+
+# notify function
+_notify () {
+	osascript &>/dev/null << EOT
+tell application "System Events"
+	display notification "$2" with title "$process [" & "$account" & "]" subtitle "$1"
+end tell
+EOT
+}
+
+# certificate & signature scan function
+_certscan () {
+	if $unsigned ; then # no warning here (is in main section)
+		team="-"
+		anchor="-"
+		skid="-"
+		certid="-"
+		certsec="-"
+	else # create temp directory and read/export code signature information
+		posixdate=$(date +%s)
+		tmpdir="/tmp/alm-$appname-$posixdate"
+		mkdir "$tmpdir"
+		cd "$tmpdir"
+		csign=$(codesign -dvvvv --extract-certificates --requirements - "$filepath" 2>&1) # --entitlements -
+		cd /
+		designated=$(echo "$csign" | grep "^designated =>")
+
+		# anchor apple (incl. apple generic)
+		anchor_aag=$(echo "$designated" | grep "anchor apple generic")
+		if [[ $anchor_aag ]] ; then
+			anchor="apple generic"
+		else
+			anchor_aa=$(echo "$designated" | grep "anchor apple$")
+			if [[ $anchor_aa ]] ; then
+				anchor="apple"
+			else
+				anchor="-"
+			fi
+		fi
+		if [[ $anchor == "-" ]] ; then
+			if $dbentry ; then
+				oldanchor=$(sqlite3 "$dbloc" "select anchor from ALM where cfbid=\"$bundleid\";")
+				if [[ $anchor != $oldanchor ]] ; then # anchor has changed
+					osaissue="$osaissue\nrequirements: not signed by Apple"
+					errors=true
+				else
+					if $hashchange || [[ $wlstatus == 2 ]] ; then # executable change without apple anchor needs warning
+						osaissue="$osaissue\nrequirements: not signed by Apple"
+						errors=true
+					fi
+				fi
+			else # initial run: needs warning
+				osaissue="$osaissue\nrequirements: not signed by Apple"
+				errors=true
+			fi
+		fi
+
+		# team identifier (initial)
+		team=$(echo "$csign" | awk -F= '/^TeamIdentifier=/{print $2}')
+		! [[ $team ]] && team="-" # warnings for team "not set" or "-" will be dealt with further down
+		$dbentry && oldteam=$(sqlite3 "$dbloc" "select teamid from ALM where cfbid=\"$bundleid\";")
+
+		# subject key identifier & ad-hoc-signed & unsigned
+		certfsize=$(stat -f%z "$tmpdir/codesign0" 2>/dev/null)
+		if [[ -f "$tmpdir/codesign0" ]] && [ $certfsize -gt 0 ] ; then # certificate(s) found
+
+			# list of extracted certificates
+			certlist=$(find "$tmpdir" -mindepth 1)
+			leafcert=$(echo "$certlist" | head -1)
+			rootcert=$(echo "$certlist" | tail -r | head -1)
+			if [[ $rootcert == $leafcert ]] ; then # no certificate chain: probably self-issued/signed
+				if ! $dbentry || $hashchange || [[ $wlstatus == 2 ]] ; then # warning for initial scan or executable change
+					osaissue="$osaissue\nchain: no root certificate"
+					errors=true
+				fi
+			fi
+
+			# verify code signing using the root certificate: Apple System leafs might throw an error
+			certsecall=$(security verify-cert -c "$rootcert" 2>&1)
+			if ! [[ $certsecall ]] ; then # no security info
+				certsec="-"
+				if $dbentry ; then
+					oldcertsec=$(sqlite3 "$dbloc" "select certsec from ALM where cfbid=\"$bundleid\";")
+					if [[ $certsec != $oldcertsec ]] ; then # security info has changed
+						osaissue="$osaissue\nsecurity: new assessment"
+						errors=true
+					else
+						if $hashchange || [[ $wlstatus == 2 ]] ; then # executable change without security info needs warning
+							osaissue="$osaissue\nsecurity: no assessment available"
+							errors=true
+						fi
+					fi
+				else # initial run needs warning if no security info
+					osaissue="$osaissue\nsecurity: no assessment available"
+					errors=true
+				fi
+			else # security info printed
+				if [[ $certsecall != "...certificate verification successful." ]] ; then # there were errors
+					if [[ $(echo "$certsecall" | grep "Cert Verify Result:") != "" ]] ; then
+						certsec=$(echo "$certsecall" | awk -F": " '{print $2}')
+					else
+						certsec="$certsecall" # non-standard security error
+					fi
+					if $dbentry ; then
+						oldcertsec=$(sqlite3 "$dbloc" "select certsec from ALM where cfbid=\"$bundleid\";")
+						if [[ $certsec != $oldcertsec ]] ; then # security info changed
+							osaissue="$osaissue\ncertificate: $certsec"
+							errors=true
+						else
+							if $hashchange || [[ $wlstatus == 2 ]] ; then # executable change with security error needs warning
+								osaissue="$osaissue\ncertificate: $certsec"
+								errors=true
+							fi
+						fi
+					else # initial run needs warning on security error
+						osaissue="$osaissue\ncertificate: $certsec"
+						errors=true
+					fi
+				else # all good
+					certsec="success"
+					# read Root CA subject to check for Apple Root CA in tandem with successful verification
+					rootca=$(openssl x509 -in "$rootcert" -inform DER -noout -text -fingerprint | grep "Subject: " | xargs | awk -F"CN=" '{print $2}')
+					if [[ $rootca == "Apple Root CA" ]] && [[ $anchor == "apple" ]]; then
+						if [[ $team == "not set" ]] ; then
+							team="Apple System" # change team ID to distinguish from self-issued certificates with team ID "not set"
+						fi
+					fi
+				fi
+			fi
+
+			# subject key identifier (SKID)
+			skid=$(openssl x509 -in "$leafcert" -inform DER -noout -text -fingerprint | grep -A1 "Subject Key Identifier" | tail -1 | xargs | sed s/://g)
+			if ! [[ $skid ]] ; then
+				noskid=true
+				if [[ $(echo "$csign" | grep "^Signature=adhoc") != "" ]] ; then
+					skid="adhoc"
+				else
+					skid="-"
+				fi
+			else
+				noskid=false
+			fi
+			if $dbentry ; then # database entry present
+				oldskid=$(sqlite3 "$dbloc" "select skid from ALM where cfbid=\"$bundleid\";")
+				if [[ $skid == $oldskid ]] ; then # SKID unchanged
+					if $hashchange || [[ $wlstatus == 2 ]] ; then  # executable change with no SKID or adhoc needs warning
+						if [[ $skid == "-" ]] ; then
+							osaissue="$osaissue\ncertificate: no SKID"
+							errors=true
+						elif [[ $skid == "adhoc" ]] ; then
+							osaissue="$osaissue\nsignature: ad-hoc"
+							errors=true
+						fi
+					fi
+				else # SKID has changed
+					if $noskid ; then
+						if [[ $skid == "adhoc" ]] ; then
+							osaissue="$osaissue\nsignature: ad-hoc"
+							errors=true
+						else
+							osaissue="$osaissue\ncertificate: no SKID"
+							errors=true
+						fi
+					else
+						if [[ $team == $oldteam ]] ; then # same team ID info in db
+							if [[ $team == "-" ]] || [[ $team == "not set" ]] ; then # SKID change with no Team ID needs warning
+								osaissue="$osaissue\ncertificate: SKID has changed"
+								errors=true
+							fi
+						else # team ID info in db is different
+							osaissue="$osaissue\ncertificate: SKID has changed\ncertificate: Team ID has changed"
+							errors=true
+						fi
+					fi
+				fi
+			else # no db entry: warnings for adhoc & no SKID
+				if [[ $skid == "adhoc" ]] ; then
+					osaissue="$osaissue\nsignature: ad-hoc"
+					errors=true
+				elif [[ $skid == "-" ]] ; then
+					osaissue="$osaissue\ncertificate: no SKID"
+					errors=true
+				fi
+			fi
+		else # no certificate(s) found
+			skid="-"
+			certsec="-"
+			if $hashchange || [[ $wlstatus == 2 ]] ; then # executable change with no certificate(s) needs warning
+				osaissue="$osaissue\ncertificate: no SKID\ncertificate: no Root CA"
+				errors=true
+			fi
+		fi
+
+		# team ID (final)
+		if $dbentry ; then
+			if [[ $team != $oldteam ]] ; then # team ID change
+				osaissue="$osaissue\ncertificate: Team ID has changed"
+				errors=true
+			else # no team ID change
+				if $hashchange || [[ $wlstatus == 2 ]] ; then # executable change with no team ID needs warning
+					if [[ $team == "not set" ]] || [[ $team == "-" ]] ; then
+						osaissue="$osaissue\nsignature: no Team ID"
+						errors=true
+					fi
+				fi
+			fi
+		else
+			if [[ $team == "not set" ]] || [[ $team == "-" ]] ; then # excluding Apple System "not set"
+				osaissue="$osaissue\nsignature: no Team ID"
+				errors=true
+			fi
+		fi
+
+		# certificate Bundle ID
+		certid=$(echo "$csign" | awk -F"=" '/^Identifier=/{print $2}') # ID from default signature output
+		reqid=$(echo "$designated" | awk -F"identifier" '{print $2}' | awk -F\" '{print $2}') # ID from requirements
+		if ! [[ $certid ]] || ! [[ $reqid ]] ; then # at least one ID is missing
+			certid="missing"
+			idmatch=false
+		else
+			if [[ $bundleid == $certid ]] && [[ $bundleid == $reqid ]] ; then # both signature IDs match bundle ID
+				idmatch=true
+			else # there's a mismatch
+				certid="mismatch"
+				idmatch=false
+			fi
+		fi
+		if ! $idmatch ; then
+			if $dbentry ; then # database entry detected
+				oldcid=$(sqlite3 "$dbloc" "select certid from ALM where cfbid=\"$bundleid\";")
+				if [[ $certid != $oldcid ]] ; then # do not warn if current $certid is not missing or mismatch
+					if [[ $certid == "missing" ]] ; then
+						osaissue="$osaissue\nsignature: at least one Bundle ID missing"
+						errors=true
+					elif [[ $certid == "mismatch" ]] ; then
+						osaissue="$osaissue\nsignature: Bundle ID mismatch"
+						errors=true
+					fi
+				else
+					if $hashchange || [[ $wlstatus == 2 ]] ; then # executable change with bundle ID errors needs warning
+						if [[ $certid == "missing" ]] ; then
+							osaissue="$osaissue\nsignature: at least one Bundle ID missing"
+							errors=true
+						elif [[ $certid == "mismatch" ]] ; then
+							osaissue="$osaissue\nsignature: Bundle ID mismatch"
+							errors=true
+						fi
+					fi
+				fi
+			else # initial run needs warning
+				if [[ $certid == "missing" ]] ; then
+					osaissue="$osaissue\nsignature: at least one Bundle ID missing"
+					errors=true
+				elif [[ $certid == "mismatch" ]] ; then
+					osaissue="$osaissue\nsignature: Bundle ID mismatch"
+					errors=true
+				fi
+			fi
+		fi
+
+		# remove extracted certificates
+		rm -rf "$tmpdir" 2>/dev/null
+
+	fi
+}
+
+# other scans
+_otherscan () {
+	oldpath=$(sqlite3 "$dbloc" "select path from ALM where cfbid=\"$bundleid\";")
+	if [[ $filepath != $oldpath ]] ; then
+		if $hashchange || $gkerror ; then # allow for user manually moving the application
+			osaissue="$osaissue\nbundle: filepath has changed"
+			errors=true
+		fi
+	fi
+	oldname=$(sqlite3 "$dbloc" "select name from ALM where cfbid=\"$bundleid\";")
+	if [[ $oldname != $appname ]] ; then
+		osaissue="$osaissue\nbundle: name has changed"
+		errors=true
+	fi
+}
+
+# AppleScript prompt function
+_prompt () {
+	osascript 2>/dev/null << EOT
+tell application "System Events"
+	activate
+	set theUserChoice to button returned of (display dialog "$1" & return & return & "$2" ¬
+		buttons {"Abort Launch", "Launch Once", "Whitelist"} ¬
+		default button 1 ¬
+		cancel button "Abort Launch" ¬
+		with title "Application Launch Monitor" ¬
+		with icon alias ((path to system folder as text) & "Library:PreferencePanes:Security.prefPane:Contents:Resources:FileVault.icns") ¬
+		giving up after 300)
+end tell
+EOT
+}
+
+# whitelist function
+_whitelist () {
+	if [[ $1 == add ]] ; then
+		sqlite3 "$dbloc" "update ALM set whitelist=\"1\" where cfbid=\"$bundleid\";"
+	elif [[ $1 == remove ]] ; then
+		sqlite3 "$dbloc" "update ALM set whitelist=\"0\" where cfbid=\"$bundleid\";"
+	elif [[ $1 == manual ]] ; then
+		sqlite3 "$dbloc" "update ALM set whitelist=\"2\" where cfbid=\"$bundleid\";"
+	fi
+}
+
+# set app to frontmost
+_frontmost () {
+	osascript &>/dev/null << EOT
+tell application "System Events"
+    tell process "$1"
+        set frontmost to true
+    end tell
+end tell
+EOT
+}
+
+! [[ -d "$supportdir" ]] && mkdir "$supportdir"
+! [[ -d "$supportdir/bin" ]] && mkdir "$supportdir/bin"
+! [[ -f "$dbloc" ]] && sqlite3 "$dbloc" "create table ALM(cfbid TEXT, path TEXT, name TEXT, teamid TEXT, anchor TEXT, skid TEXT, certid TEXT, hash TEXT, whitelist TEXT, spctl TEXT, certsec TEXT, misc1 TEXT, misc2 TEXT, misc3 TEXT);"
+
+_almonwatch () {
+
+	while read notification ; do
+
+		if [[ $notification == "Listening..." ]] ; then
+			echo "almon is running..."
+			continue
+
+		elif [[ $notification == "Stopping..." ]] ; then
+			echo "almon has exited."
+			break
+
+		else
+			# blank settings
+			errors=false
+			unsigned=false
+			pid=""
+			bundleid=""
+			filepath=""
+			appname=""
+			teamid=""
+			skid=""
+			exehash=""
+			wlstatus=""
+
+			# parse input
+			pid=$(echo "$notification" | awk -F":::" '{print $2}')
+			filepath=$(echo "$notification" | awk -F":::" '{print $3}')
+			appname=$(echo "$notification" | awk -F":::" '{print $5}')
+			bundleid=$(echo "$notification" | awk -F":::" '{print $4}')
+
+			# determine executable
+			executable=$(defaults read "$filepath/Contents/Info.plist" CFBundleExecutable)
+			exepath="$filepath/Contents/MacOS/$executable"
+
+			# initial log
+			echo -e "\n*** Application launch ***\nName: $appname\nBundle ID: $bundleid\nPath: $filepath\nProcess ID: $pid\nExecutable: $exepath"
+
+			# check whitelist status
+			wlstatus=$(sqlite3 "$dbloc" "select whitelist from ALM where cfbid=\"$bundleid\";" 2>/dev/null)
+			if ! [[ $wlstatus ]] ; then
+				dbentry=false
+				whitelisted=false
+				echo "$appname: no database entry found!"
+			else
+				echo "$appname: found database entry"
+				dbentry=true
+				if [[ $wlstatus == 1 ]] ; then
+					whitelisted=true
+					echo "$appname: set to auto-whitelist"
+				elif [[ $wlstatus == 2 ]] ; then
+					whitelisted=true
+					wloverride=true
+					echo "$appname: set to manual whitelist"
+				else
+					whitelisted=false
+					echo "$appname: not whitelisted"
+				fi
+			fi
+
+			# executable hashes
+			exehash=$(shasum -a 256 "$exepath" | awk '{print $1}')
+			if $dbentry ; then
+				oldhash=$(sqlite3 "$dbloc" "select hash from ALM where cfbid=\"$bundleid\";" 2>/dev/null)
+				if [[ $exehash != $oldhash ]] ; then
+					hashchange=true
+					wloverride=false
+					wlstatus="0"
+					echo "Executable: $oldhash > $exehash"
+				else
+					hashchange=false
+					echo "Executable: hashes match"
+				fi
+			else
+				hashchange=false
+			fi
+
+			# Gatekeeper assessment
+			if [[ $bundleid == "com.apple.dt.Xcode" ]] && [[ $filepath == "/Applications/Xcode.app" ]] && [[ $appname == "Xcode" ]] ; then
+				if $hashchange ; then
+					spctl_deep=$(codesign --verify --deep "$filepath" 2>&1 | head -1)
+				else
+					spctl_deep="skipped"
+				fi
+			else
+				spctl_deep=$(codesign --verify --deep "$filepath" 2>&1 | head -1)
+			fi
+			if [[ $spctl_deep ]] ; then
+				if [[ $spctl_deep != "skipped" ]] ; then
+					[[ $(echo "$spctl_deep" | grep "code object is not signed at all") ]] && unsigned=true || unsigned=false
+					gk_issue=$(echo "$spctl_deep" | awk -F": " '{print substr($0, index($0,$2))}')
+					gkerror=true
+					if ! $dbentry ; then
+						osaissue="codesign: $gk_issue"
+						errors=true
+					fi
+				else
+					gkerror=true
+					gk_issue="skipped"
+					if ! $dbentry ; then
+						osaissue="codesign: $gk_issue"
+						errors=true
+					fi
+				fi
+			else
+				spctl_deep="-"
+				gk_issue="-"
+				gkerror=false
+			fi
+
+			# qualitative assessment
+			if $dbentry ; then
+				oldspctl=$(sqlite3 "$dbloc" "select spctl from ALM where cfbid=\"$bundleid\";" 2>/dev/null)
+				! [[ $oldspctl ]] && oldspctl="-"
+				if [[ $gk_issue == $oldspctl ]] ; then # same GK assessment
+					if ! $hashchange ; then # executable unchanged
+						if [[ $gk_issue != "-" ]]; then # not a benign bundle
+							osaissue="codesign: $gk_issue"
+							errors=true
+							if $whitelisted && [[ $wlstatus == 2 ]] ; then
+								wloverride=true
+							fi
+						fi
+					else # executable modified
+						if [[ $gk_issue != "-" ]]; then # not a bening bundle; no whitelisting due to executable change
+							osaissue="codesign: $gk_issue\nbundle: executable has been modified"
+							errors=true
+							wloverride=false
+							wlstatus="0"
+						fi
+					fi
+				else # different GK assessment
+					if [[ $gk_issue != "-" ]] ; then # possible malware
+						wloverride=false
+						wlstatus="0"
+						osaissue="codesign: $gk_issue"
+						$hashchange && osaissue="$osaissue\nbundle: executable has been modified"
+						errors=true
+					fi
+				fi
+			else
+				wloverride=false
+				wlstatus="0"
+			fi
+
+			# run additional scans
+			_certscan
+			if $dbentry ; then
+				_otherscan
+				if $errors ; then
+					if $wloverride && [[ $wlstatus == 2 ]] ; then
+						sqlite3 "$dbloc" "update ALM set path = \"$filepath\", name = \"$appname\", teamid = \"$team\", anchor = \"$anchor\", skid = \"$skid\", certid = \"$certid\", hash = \"$exehash\", whitelist = \"2\", spctl = \"$gk_issue\", certsec = \"$certsec\" where cfbid = \"$bundleid\";"
+					else
+						sqlite3 "$dbloc" "update ALM set path = \"$filepath\", name = \"$appname\", teamid = \"$team\", anchor = \"$anchor\", skid = \"$skid\", certid = \"$certid\", hash = \"$exehash\", whitelist = \"0\", spctl = \"$gk_issue\", certsec = \"$certsec\" where cfbid = \"$bundleid\";"
+					fi
+				else
+					if $wloverride && [[ $wlstatus == 2 ]] ; then
+						wloverride=false
+						wlstatus="1"
+					fi
+					sqlite3 "$dbloc" "update ALM set path = \"$filepath\", name = \"$appname\", teamid = \"$team\", anchor = \"$anchor\", skid = \"$skid\", certid = \"$certid\", hash = \"$exehash\", whitelist = \"1\", spctl = \"$gk_issue\", certsec = \"$certsec\" where cfbid = \"$bundleid\";"
+					# sqlite3 "$dbloc" "update ALM set (path,name,teamid,anchor,skid,certid,hash,whitelist,spctl,certsec) values (\"$filepath\",\"$appname\",\"$team\",\"$anchor\",\"$skid\",\"$certid\",\"$exehash\",\"1\",\"$gk_issue\",\"$certsec\") where cfbid = \"$bundleid\";"
+				fi
+			else
+				if $errors ; then
+					sqlite3 "$dbloc" "insert into ALM (cfbid,path,name,teamid,anchor,skid,certid,hash,whitelist,spctl,certsec) values (\"$bundleid\",\"$filepath\",\"$appname\",\"$team\",\"$anchor\",\"$skid\",\"$certid\",\"$exehash\",\"0\",\"$gk_issue\",\"$certsec\");"
+				else
+					sqlite3 "$dbloc" "insert into ALM (cfbid,path,name,teamid,anchor,skid,certid,hash,whitelist,spctl,certsec) values (\"$bundleid\",\"$filepath\",\"$appname\",\"$team\",\"$anchor\",\"$skid\",\"$certid\",\"$exehash\",\"1\",\"$gk_issue\",\"$certsec\");"
+				fi
+			fi
+
+			# notification & user prompt
+			export supportdir
+			export notification
+			if $errors ; then
+				osaissue=$(echo -e "$osaissue" | grep -v "^$" | awk '!seen[$0]++')
+				echo -e "$appname: there are issues!\n---"
+				echo -e "$osaissue\n---"
+				if $wloverride ; then
+					echo "Whitelist override: true"
+					if [[ $gk_issue != "skipped" ]] ; then
+						_notify "☑️ Whitelisted with issues" "$appname"
+					else
+						_notify "☑️ Whitelisted: skipped" "$appname"
+					fi
+					kill -s CONT $pid && _frontmost "$appname"
+					if ! $hashchange ; then
+						bash -c '"$supportdir"/bin/run "$notification:::2:::samehash"' 2>/dev/null &
+					else
+						bash -c '"$supportdir"/bin/run "$notification:::2:::newhash"' 2>/dev/null &
+					fi
+				else
+					echo "Whitelist override: false"
+					osaprompt="The application '$appname' with the Bundle ID '$bundleid' has the following issues:"
+					_beep
+					_notify "⚠️ There are issues!" "$appname"
+					userchoice=$(_prompt "$osaprompt" "$osaissue")
+					if [[ $userchoice == "Whitelist" ]] ; then
+						echo "Whitelisting: $appname"
+						_whitelist manual
+						kill -s CONT $pid && _frontmost "$appname"
+						if ! $hashchange ; then
+							bash -c '"$supportdir"/bin/run "$notification:::2:::samehash"' 2>/dev/null &
+						else
+							bash -c '"$supportdir"/bin/run "$notification:::2:::newhash"' 2>/dev/null &
+						fi
+					elif [[ $userchoice == "Launch Once" ]] ; then
+						_whitelist remove
+						echo "Launching once: $appname"
+						kill -s CONT $pid && _frontmost "$appname"
+						if ! $hashchange ; then
+							bash -c '"$supportdir"/bin/run "$notification:::0:::samehash"' 2>/dev/null &
+						else
+							bash -c '"$supportdir"/bin/run "$notification:::0:::newhash"' 2>/dev/null &
+						fi
+					else
+						_whitelist remove
+						echo "Aborting launch: $appname"
+						osascript -e 'tell application "$appname" to quit' && { sleep .5 ; kill -s KILL $pid 2>/dev/null ; }
+						if ! $hashchange ; then
+							bash -c '"$supportdir"/bin/run "$notification:::0:::samehash"' 2>/dev/null &
+						else
+							bash -c '"$supportdir"/bin/run "$notification:::0:::newhash"' 2>/dev/null &
+						fi
+					fi
+				fi
+			else
+				echo "$appname: no issues"
+				_notify "✅ Verified" "$appname"
+				kill -s CONT $pid && _frontmost "$appname"
+				_whitelist add
+				if ! $hashchange ; then
+					bash -c '"$supportdir"/bin/run "$notification:::1:::samehash"' 2>/dev/null &
+				else
+					bash -c '"$supportdir"/bin/run "$notification:::1:::newhash"' 2>/dev/null &
+				fi
+			fi
+		fi
+	done
+}
+
+echo "Listening for application launch notifications..."
+_almonwatch
+
+echo "*** Exiting... ***"
+exit 0
