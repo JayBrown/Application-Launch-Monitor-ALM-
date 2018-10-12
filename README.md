@@ -34,13 +34,13 @@ To initially scan application bundles after download or installation, you can al
   * **launch once** or **abort launch** (setting `0` = not whitelisted).
 * For later comparison **ALM** saves the following information in an sqlite database: the bundle ID in the `Info.plist`, the absolute filepath, the application name, the Team ID from the code signature, the code signing anchor, the code signing certificate's subject key identifier, the bundle ID embedded in the code signature, the certificate's team identifier, the SHA-256 hash of the main executable, the whitelist status, the `codesign` validation results, and the certificate's `security` validation results.
 * You can blacklist previously whitelisted applications (i.e. remove them from the **ALM** database) by running the `almonwatch` shell script directly with options (*see below*).
-* You can perform an additional scan independent of ALM: if you copy a script called `run` into `/Library/Application\ Support/ALM/bin`, **ALM** will execute it while passing the original `NSWorkspace` notification (including process ID) plus additional arguments: (a) the whitelisting status as arguments, and (b): hash change information (modified/updated executable).
+* You can perform an additional scan independent of ALM: if you copy a script called `run` into `/Library/Application\ Support/ALM/bin`, **ALM** will execute it while passing the original `NSWorkspace` notification (including process ID) plus additional arguments: (a) the whitelisting status, and (b): hash change information (modified/updated executable).
 
 ## Installation
 * Clone repository & `cd` into repo
 * `gcc -Wall almon.m -o almon -lobjc -framework Cocoa`
   * alternative: use prebuilt CLI `almon` (built with Xcode 10 on macOS 10.13.6)
-* `sudo chown root:wheel almon && sudo chmod +ux almon && ln -s almon /usr/local/bin/almon``
+* `sudo chown root:wheel almon && sudo chmod +ux almon && ln -s almon /usr/local/bin/almon`
 * `sudo chown root:wheel almonwatch && sudo chmod +ux almonwatch && ln -s almonwatch /usr/local/bin/almonwatch`
 * `sudo cp local.lcars.ALM.plist /Library/LaunchDaemons/local.lcars.ALM.plist`
 * `sudo chown root:wheel /Library/LaunchDaemons/local.lcars.ALM.plist`
@@ -49,7 +49,7 @@ To initially scan application bundles after download or installation, you can al
 Please note that when building `almon` with **Xcode 10** or the associated **Developer Tools** on High Sierra, you will probably run into `ld` warnings; you can safely ignore them.
 
 ### Notes
-* ***ALM** does not (yet?) work for background applications, e.g. menu bar apps.
+* **ALM** does not (yet?) work for background applications, e.g. menu bar apps.
 * **ALM** runs as a LaunchAgent owned by root; if you `chown` the associated files as `root:wheel` (*see above*), the daemon, its files, and the sqlite database it creates in `/Library/Application\ Support/ALM` are safe against tampering without root escalation.
 * On a modern Mac with fast processors and SSDs, you will only notice a small delay in application launches when dealing with larger bundles, e.g. Electron "apps"; on older Macs the eval scans will take a little longer.
   * Scans of extremely large bundles (more than 5 GB) will take too long even on modern Macs, so **ALM** is currently skipping `codesign` re-evaluation for **Xcode**, if the executable hasn't been modified/updated.
