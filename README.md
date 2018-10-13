@@ -70,7 +70,7 @@ Remove or blacklist an application (only one at a time) from (in) the ALM databa
 * `sudo almonwatch [remove | blacklist] id <Application Bundle ID>`, or
 * `sudo almonwatch [remove | blacklist] path <Path to Application>`
 
-The `remove` option actually removes the whole database entry for the given application, while the `blacklist` option sets the whitelist key to `X`, meaning that any launch of a blacklisted app will be terminated (gracefully with `osascript` first before running the `kill` command as a fallback). You cannot re-whitelist a blacklisted application: instead you need to `remove` it and launch it again for re-evaluation.
+The `remove` option actually removes the whole database entry for the given application, while the `blacklist` option sets the whitelist key to `X`, meaning that any launch of a blacklisted app will be terminated (gracefully with `osascript` first before running the `kill` command as a fallback). You cannot re-whitelist a blacklisted application: instead you need to `remove` its entry from the database, and launch it again for re-evaluation.
 
 To delete all entries from the database, just execute `sudo rm -f /Library/Application\ Support/ALM/alm.db`; an empty database will be recreated at the next scan.
 
