@@ -34,7 +34,7 @@ To initially scan application bundles after download or installation, you can al
   * **launch once** or **abort launch** (setting `0` = not whitelisted);
   * *see below* for the blacklisting option.
 * For later comparison **ALM** saves the following information in an sqlite database: the bundle ID in the `Info.plist`, the absolute filepath, the application name, the Team ID from the code signature, the code signing anchor, the code signing certificate's subject key identifier, the bundle ID embedded in the code signature, the certificate's team identifier, the SHA-256 hash of the main executable, the whitelist status, the `codesign` validation results, and the certificate's `security` validation results.
-* You can blacklist previously whitelisted applications (i.e. remove them from the **ALM** database) by running the `almonwatch` shell script directly with options (*see below*).
+* You can blacklist applications, or remove applications from the **ALM** database, by running the `almonwatch` shell script directly with options (*see below*).
 * You can perform an additional scan independent of ALM: if you copy a script called `run` into `/Library/Application\ Support/ALM/bin`, **ALM** will execute it while passing the original `NSWorkspace` notification (including process ID) plus additional arguments: (a) the whitelisting status, and (b): hash change information (modified/updated executable).
 
 ## Installation
@@ -63,13 +63,15 @@ Please note that when building `almon` with **Xcode 10** or the associated **Dev
 * Since **ALM** runs as root, it will not use the local user's alert sound, but you can change the global alert sound by executing: `sudo defaults write .GlobalPreferences com.apple.sound.beep.sound /Users/<UserName>/Library/Sounds/<SoundFile>`
 
 ## Command Line Options
-Remove or applications from the ALM whitelist by executing either
+Remove or blacklist an application (only one at a time) from (in) the ALM database by executing either
 
 * `sudo almonwatch [remove | blacklist] name <Application Name>`, or
 * `sudo almonwatch [remove | blacklist] id <Application Bundle ID>`, or
 * `sudo almonwatch [remove | blacklist] path <Path to Application>`
 
-The `remove` option actually removes the whole database entry, while the `blacklist` option sets the whitelist key to `X`, meaning that any launch of a blacklisted app will be terminated (gracefully with `osascript` first before running the `kill` command as a fallback). You cannot re-whitelist a blacklisted application: instead you need to `remove` it and launch it again to re-evaluate.
+The `remove` option actually removes the whole database entry for the given application, while the `blacklist` option sets the whitelist key to `X`, meaning that any launch of a blacklisted app will be terminated (gracefully with `osascript` first before running the `kill` command as a fallback). You cannot re-whitelist a blacklisted application: instead you need to `remove` it and launch it again for re-evaluation.
+
+To delete all entries from the database, just execute `sudo rm -f /Library/Application\ Support/ALM/alm.db`; an empty database will be recreated at the next scan.
 
 ## Uninstall
 * `sudo launchctl unload local.lcars.ALMHelper`
