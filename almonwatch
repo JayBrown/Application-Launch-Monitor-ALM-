@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # almonwatch
-# version 1.0 beta 4 rev 2
+# version 1.0 beta 4 rev 3
 
 # set -x
 # PS4=':$LINENO+'
@@ -438,7 +438,10 @@ EOT
 }
 
 ! [[ -d "$supportdir" ]] && mkdir "$supportdir"
-! [[ -d "$supportdir/bin" ]] && mkdir "$supportdir/bin"
+if ! [[ -d "$supportdir/bin" ]] ; then
+	mkdir "$supportdir/bin"
+	chmod 744 "$supportdir/bin"
+fi
 if ! [[ -f "$dbloc" ]] ; then
 	sqlite3 "$dbloc" "create table ALM(cfbid TEXT, path TEXT, name TEXT, teamid TEXT, anchor TEXT, skid TEXT, certid TEXT, hash TEXT, whitelist TEXT, spctl TEXT, certsec TEXT, misc1 TEXT, misc2 TEXT, misc3 TEXT);"
 	chown root:wheel "$dbloc"
