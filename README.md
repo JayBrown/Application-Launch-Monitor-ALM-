@@ -39,7 +39,7 @@ To initially scan application bundles after download or installation, you can al
 * You can perform an additional scan independent of ALM: if you copy a script called `run` into `/Library/Application\ Support/ALM/bin`, **ALM** will execute it while passing the original `NSWorkspace` notification (including process ID) plus additional arguments: (a) the whitelisting status, and (b): hash change information (modified/updated executable).
 
 ## Installation
-* Clone repository & `cd` into repo
+* Clone (or download) repository & `cd` into repo
 * `gcc -Wall almon.m -o almon -lobjc -framework Cocoa`
   * alternative: use prebuilt CLI `almon` (built with Xcode 10 on macOS 10.13.6)
 * `cp almon /usr/local/bin/almon && sudo chown root:wheel /usr/local/bin/almon && sudo chmod +ux /usr/local/bin/almon`
