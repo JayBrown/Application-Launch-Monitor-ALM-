@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # almonwatch
-# version 1.0 beta 3 rev 1
+# version 1.0 beta 3 rev 2
 
 # set -x
 # PS4=':$LINENO+'
@@ -38,6 +38,9 @@ if [[ $1 == "blacklist" ]] ; then
 	exit
 fi
 
+# activate SystemEvents once to avoid missing notifications (also added in almhelper)
+osascript -e 'tell application "System Events" to activate' 2>/dev/null
+
 echo "************************************************"
 echo "*** Application Launch Monitor (ALM) Watcher ***"
 echo "************************************************"
@@ -56,6 +59,7 @@ _beep () {
 _notify () {
 	osascript &>/dev/null << EOT
 tell application "System Events"
+	activate
 	display notification "$2" with title "$process [" & "$account" & "]" subtitle "$1"
 end tell
 EOT

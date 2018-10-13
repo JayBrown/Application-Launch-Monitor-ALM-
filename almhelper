@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# version 1.0
+# version 1.1
 
 export LANG=en_US.UTF-8
 export PATH=$PATH:/usr/local/bin
@@ -17,7 +17,11 @@ if ! [[ $almstatus ]] ; then
 	launchctl load /Library/LaunchDaemons/local.lcars.ALM.plist
 else
 	if [[ $almstatus != "-" ]] ; then
-		echo "ALM already running."
+		echo "ALM already running: checking for System Events status..."
+		if ! [[ $(pgrep -x "System Events") ]] ; then
+			echo "Activating System Events..."
+			osascript -e 'tell application "System Events" to activate' 2>/dev/null
+		fi
 		echo "Exiting..."
 		exit
 	fi
@@ -37,11 +41,21 @@ done
 
 almstatus=$(launchctl list | awk '/local.lcars.ALM$/{print $1}')
 if ! [[ $almstatus ]] ; then
-	echo "ALM not loaded: loading & starting now..."
+	echo "ALM not loaded: checking for System Events status first..."
+	if ! [[ $(pgrep -x "System Events") ]] ; then
+		echo "Activating System Events..."
+		osascript -e 'tell application "System Events" to activate' 2>/dev/null
+	fi
+	echo "Loading & starting ALM now..."
 	launchctl load /Library/LaunchDaemons/local.lcars.ALM.plist && launchctl start local.lcars.ALM
 else
 	if [[ $almstatus == "-" ]] ; then
-		echo "ALM already loaded: starting now..."
+		echo "ALM already loaded: checking for System Events status first..."
+		if ! [[ $(pgrep -x "System Events") ]] ; then
+			echo "Activating System Events..."
+			osascript -e 'tell application "System Events" to activate' 2>/dev/null
+		fi
+		echo "Starting ALM now..."
 		launchctl start local.lcars.ALM
 	fi
 fi
