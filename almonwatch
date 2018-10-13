@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # almonwatch
-# version 1.0 beta 4
+# version 1.0 beta 4 rev 1
 
 # set -x
 # PS4=':$LINENO+'
@@ -477,13 +477,14 @@ _almonwatch () {
 			appname=$(echo "$notification" | awk -F":::" '{print $5}')
 			bundleid=$(echo "$notification" | awk -F":::" '{print $4}')
 			plistloc="$filepath/Contents/Info.plist"
+			nsworkspace=$(echo "$notification" | awk -F":::" '{print $1}')
 
 			# determine executable
 			executable=$(plutil -p "$plistloc" | awk -F\" '/CFBundleExecutable/{print $4}')
 			exepath="$filepath/Contents/MacOS/$executable"
 
 			# initial log
-			echo -e "\n*** Application launch ***\nName: $appname\nBundle ID: $bundleid\nPath: $filepath\nProcess ID: $pid\nExecutable: $exepath"
+			echo -e "\n*** Launch detected ***\nName: $appname\nBundle ID: $bundleid\nPath: $filepath\nProcess ID: $pid\nExecutable: $exepath\nNSWorkspace: $nsworkspace"
 
 			# check whitelist status
 			wlstatus=$(sqlite3 "$dbloc" "select whitelist from ALM where cfbid=\"$bundleid\";" 2>/dev/null)
