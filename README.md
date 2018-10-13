@@ -75,8 +75,8 @@ The `remove` option actually removes the whole database entry for the given appl
 To delete all entries from the database, just execute `sudo rm -f /Library/Application\ Support/ALM/alm.db`; an empty database will be recreated at the next scan.
 
 ## Uninstall
-* `sudo launchctl unload local.lcars.ALMHelper`
-* `sudo launchctl unload local.lcars.ALM`
+* `sudo launchctl stop local.lcars.ALMHelper && sudo launchctl unload /Library/LaunchDaemons/local.lcars.ALMHelper.plist`
+* `sudo launchctl stop local.lcars.ALM && sudo launchctl unload /Library/LaunchDaemons/local.lcars.ALM.plist`
 * `sudo killall almon`
 * `sudo killall almonwatch`
 * `sudo killall almhelper`
