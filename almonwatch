@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # almonwatch
-# version 1.0 beta 3
+# version 1.0 beta 3 rev 1
 
 # set -x
 # PS4=':$LINENO+'
@@ -49,7 +49,7 @@ process="Application Launch Monitor"
 
 # beep function
 _beep () {
-	osascript -e "beep"
+	osascript -e 'beep'
 }
 
 # notify function
@@ -381,10 +381,14 @@ _almonwatch () {
 
 		if [[ $notification == "Listening..." ]] ; then
 			echo "almon is running..."
+			_beep
+			_notify "🔎 ALM has started…"
 			continue
 
 		elif [[ $notification == "Stopping..." ]] ; then
 			echo "almon has exited."
+			_beep
+			_notify "⁉️ ALM has exited!" "Something went wrong…"
 			break
 
 		else

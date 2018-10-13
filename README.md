@@ -59,6 +59,7 @@ Please note that when building `almon` with **Xcode 10** or the associated **Dev
   * Scans of extremely large bundles (more than 5 GB) will take too long even on modern Macs, so **ALM** is currently skipping `codesign` re-evaluation for **Xcode**, if the executable hasn't been modified/updated.
 * The **ALM** database only ever stores the current version of an application; information on previous versions will be overwritten automatically.
 * If you have two copies of the same application on your volume, you might run into **ALM** error prompts; please change one of the two applications' bundle IDs to avoid confusion.
+* Since **ALM** runs as root, it will not use the local user's alert sound, but you can change the global alert sound by executing: `sudo defaults write .GlobalPreferences com.apple.sound.beep.sound /Users/<UserName>/Library/Sounds/<SoundFile>`
 
 ## Command Line Options
 Remove applications from the ALM whitelist by executing
