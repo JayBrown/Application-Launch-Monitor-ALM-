@@ -31,7 +31,8 @@ To initially scan application bundles after download or installation, you can al
   * detecting when the filepath or application name has changed.
 * **ALM** auto-whitelists applications that pass all tests (setting `1`); if there are errors, a prompt is displayed, and the user has to choose how to proceed; the options are:
   * **whitelist** the application manually (setting `2`), e.g. for applications that are unsigned like **VirtualC64** or self-signed like **Skim** (*see below*; screengrabs);
-  * **launch once** or **abort launch** (setting `0` = not whitelisted).
+  * **launch once** or **abort launch** (setting `0` = not whitelisted);
+  * *see below* for the blacklisting option.
 * For later comparison **ALM** saves the following information in an sqlite database: the bundle ID in the `Info.plist`, the absolute filepath, the application name, the Team ID from the code signature, the code signing anchor, the code signing certificate's subject key identifier, the bundle ID embedded in the code signature, the certificate's team identifier, the SHA-256 hash of the main executable, the whitelist status, the `codesign` validation results, and the certificate's `security` validation results.
 * You can blacklist previously whitelisted applications (i.e. remove them from the **ALM** database) by running the `almonwatch` shell script directly with options (*see below*).
 * You can perform an additional scan independent of ALM: if you copy a script called `run` into `/Library/Application\ Support/ALM/bin`, **ALM** will execute it while passing the original `NSWorkspace` notification (including process ID) plus additional arguments: (a) the whitelisting status, and (b): hash change information (modified/updated executable).
@@ -57,18 +58,18 @@ Please note that when building `almon` with **Xcode 10** or the associated **Dev
 * **ALM** runs as a LaunchAgent owned by root; if you `chown` the associated files as `root:wheel` (*see above*), the daemon, its files, and the sqlite database it creates in `/Library/Application\ Support/ALM` are safe against tampering without root escalation.
 * On a modern Mac with fast processors and SSDs, you will only notice a small delay in application launches when dealing with larger bundles, e.g. Electron "apps"; on older Macs the eval scans will take a little longer.
   * Scans of extremely large bundles (more than 5 GB) will take too long even on modern Macs, so **ALM** is currently skipping `codesign` re-evaluation for **Xcode**, if the executable hasn't been modified/updated.
-* The **ALM** database only ever stores the current version of an application; information on previous versions will be overwritten automatically.
+* The **ALM** database only ever stores the current version of an application; information on previous versions will be overwritten automatically; you can look at the contents of the database with tools like **[DB Browser for SQLite](https://sqlitebrowser.org/)**.
 * If you have two copies of the same application on your volume, you might run into **ALM** error prompts; please change one of the two applications' bundle IDs to avoid confusion.
 * Since **ALM** runs as root, it will not use the local user's alert sound, but you can change the global alert sound by executing: `sudo defaults write .GlobalPreferences com.apple.sound.beep.sound /Users/<UserName>/Library/Sounds/<SoundFile>`
 
 ## Command Line Options
-Remove applications from the ALM whitelist by executing
+Remove or applications from the ALM whitelist by executing either
 
-* `sudo almonwatch blacklist name <Application Name>`, or
-* `sudo almonwatch blacklist id <Application Bundle ID>`, or
-* `sudo almonwatch blacklist path <Path to Application>`
+* `sudo almonwatch [remove | blacklist] name <Application Name>`, or
+* `sudo almonwatch [remove | blacklist] id <Application Bundle ID>`, or
+* `sudo almonwatch [remove | blacklist] path <Path to Application>`
 
-Please note that blacklisting does not work with applications that have been auto-whitelisted; they will be auto-whitelisted again at their next launch.
+The `remove` option actually removes the whole database entry, while the `blacklist` option sets the whitelist key to `X`, meaning that any launch of a blacklisted app will be terminated (gracefully with `osascript` first before running the `kill` command as a fallback). You cannot re-whitelist a blacklisted application: instead you need to `remove` it and launch it again to re-evaluate.
 
 ## Uninstall
 * `sudo launchctl unload local.lcars.ALMHelper`
