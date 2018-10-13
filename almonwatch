@@ -440,7 +440,7 @@ EOT
 ! [[ -d "$supportdir" ]] && mkdir "$supportdir"
 if ! [[ -d "$supportdir/bin" ]] ; then
 	mkdir "$supportdir/bin"
-	chmod 744 "$supportdir/bin"
+	chmod 775 "$supportdir/bin"
 fi
 if ! [[ -f "$dbloc" ]] ; then
 	sqlite3 "$dbloc" "create table ALM(cfbid TEXT, path TEXT, name TEXT, teamid TEXT, anchor TEXT, skid TEXT, certid TEXT, hash TEXT, whitelist TEXT, spctl TEXT, certsec TEXT, misc1 TEXT, misc2 TEXT, misc3 TEXT);"
