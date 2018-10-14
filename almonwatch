@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # almonwatch
-# version 1.0 beta 5
+# version 1.0 beta 5 rev 1
 
 # set -x
 # PS4=':$LINENO+'
@@ -140,7 +140,7 @@ _certscan () {
 		tmpdir="/tmp/alm-$appname-$posixdate"
 		mkdir "$tmpdir"
 		cd "$tmpdir"
-		csign=$(codesign -dvvvv --extract-certificates --requirements - "$filepath" 2>&1) # --entitlements -
+		csign=$(codesign -dvvvv --extract-certificates --requirements - "$filepath" 2>&1) # OUT: --entitlements -
 		cd /
 		designated=$(echo "$csign" | grep "^designated =>")
 
@@ -239,7 +239,7 @@ _certscan () {
 					certsec="success"
 					# read Root CA subject to check for Apple Root CA in tandem with successful verification
 					rootca=$(openssl x509 -in "$rootcert" -inform DER -noout -text -fingerprint | grep "Subject: " | xargs | awk -F"CN=" '{print $2}')
-					if [[ $rootca == "Apple Root CA" ]] && [[ $anchor == "apple" ]]; then
+					if [[ $rootca == "Apple Root CA" ]] && [[ $anchor == "apple" ]] ; then
 						if [[ $team == "not set" ]] ; then
 							team="Apple System" # change team ID to distinguish from self-issued certificates with team ID "not set"
 						fi
@@ -281,14 +281,24 @@ _certscan () {
 							errors=true
 						fi
 					else
-						if [[ $team == $oldteam ]] ; then # same team ID info in db
-							if [[ $team == "-" ]] || [[ $team == "not set" ]] ; then # SKID change with no Team ID needs warning
+						if [[ $wlstatus == 2 ]] ; then # warn of SKID change in manually whitelisted apps
+							if [[ $team == $oldteam ]] ; then
 								osaissue="$osaissue\ncertificate: SKID has changed"
 								errors=true
+							else
+								osaissue="$osaissue\ncertificate: SKID has changed\ncertificate: Team ID has changed"
+								errors=true
 							fi
-						else # team ID info in db is different
-							osaissue="$osaissue\ncertificate: SKID has changed\ncertificate: Team ID has changed"
-							errors=true
+						else
+							if [[ $team == $oldteam ]] ; then # same team ID info in db
+								if [[ $team == "-" ]] || [[ $team == "not set" ]] ; then # SKID change with no Team ID needs warning
+									osaissue="$osaissue\ncertificate: SKID has changed"
+									errors=true
+								fi
+							else # team ID info in db is different
+								osaissue="$osaissue\ncertificate: SKID has changed\ncertificate: Team ID has changed"
+								errors=true
+							fi
 						fi
 					fi
 				fi
