@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # almonwatch
-# version 1.0 beta 5 rev 1
+# version 1.0 beta 5 rev 2
 
 # set -x
 # PS4=':$LINENO+'
@@ -574,14 +574,23 @@ _almonwatch () {
 			fi
 
 			# Gatekeeper assessment
-			if [[ $bundleid == "com.apple.dt.Xcode" ]] && [[ $filepath == "/Applications/Xcode.app" ]] && [[ $appname == "Xcode" ]] ; then
-				if $hashchange ; then
-					spctl_deep=$(codesign --verify --deep "$filepath" 2>&1 | head -1)
-				else
+			physize=$(mdls -name kMDItemPhysicalSize "$filepath" | awk -F" = " '{print $2}')
+			if ! $dbentry ; then
+				if [[ $physize ]] && [[ $physize -gt 3500000000 ]] ; then
 					spctl_deep="skipped"
+				else
+					spctl_deep=$(codesign --verify --deep "$filepath" 2>&1 | head -1)
 				fi
 			else
-				spctl_deep=$(codesign --verify --deep "$filepath" 2>&1 | head -1)
+				if [[ $physize ]] && [[ $physize -gt 3500000000 ]] ; then
+					if $hashchange ; then
+						spctl_deep=$(codesign --verify --deep "$filepath" 2>&1 | head -1)
+					else
+						spctl_deep="skipped"
+					fi
+				else
+					spctl_deep=$(codesign --verify --deep "$filepath" 2>&1 | head -1)
+				fi
 			fi
 			if [[ $spctl_deep ]] ; then
 				if [[ $spctl_deep != "skipped" ]] ; then
@@ -610,30 +619,35 @@ _almonwatch () {
 			if $dbentry ; then
 				oldspctl=$(sqlite3 "$dbloc" "select spctl from ALM where cfbid=\"$bundleid\";" 2>/dev/null)
 				! [[ $oldspctl ]] && oldspctl="-"
-				if [[ $gk_issue == $oldspctl ]] ; then # same GK assessment
-					if ! $hashchange ; then # executable unchanged
-						if [[ $gk_issue != "-" ]]; then # not a benign bundle
-							osaissue="codesign: $gk_issue"
-							errors=true
-							if $whitelisted && [[ $wlstatus == 2 ]] ; then
-								wloverride=true
+				if [[ $oldspctl == "skipped" ]] ; then
+					### if [[ $gk_issue != $oldspctl ]] ; then # different GK assessment, previously skipped, not skipped now, e.g. due to hashchange
+					echo "do something" ###
+				else
+					if [[ $gk_issue == $oldspctl ]] ; then # same GK assessment
+						if ! $hashchange ; then # executable unchanged
+							if [[ $gk_issue != "-" ]] ; then # not a benign bundle
+								osaissue="codesign: $gk_issue"
+								errors=true
+								if $whitelisted && [[ $wlstatus == 2 ]] ; then
+									wloverride=true
+								fi
+							fi
+						else # executable modified
+							if [[ $gk_issue != "-" ]] ; then # not a bening bundle; no whitelisting due to executable change
+								osaissue="codesign: $gk_issue\nbundle: executable has been modified"
+								errors=true
+								wloverride=false
+								wlstatus="0"
 							fi
 						fi
-					else # executable modified
-						if [[ $gk_issue != "-" ]]; then # not a bening bundle; no whitelisting due to executable change
-							osaissue="codesign: $gk_issue\nbundle: executable has been modified"
-							errors=true
+					else # different GK assessment
+						if [[ $gk_issue != "-" ]] ; then # possible malware
 							wloverride=false
 							wlstatus="0"
+							osaissue="codesign: $gk_issue"
+							$hashchange && osaissue="$osaissue\nbundle: executable has been modified"
+							errors=true
 						fi
-					fi
-				else # different GK assessment
-					if [[ $gk_issue != "-" ]] ; then # possible malware
-						wloverride=false
-						wlstatus="0"
-						osaissue="codesign: $gk_issue"
-						$hashchange && osaissue="$osaissue\nbundle: executable has been modified"
-						errors=true
 					fi
 				fi
 			else
