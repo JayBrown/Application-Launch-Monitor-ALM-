@@ -43,13 +43,13 @@ To initially scan application bundles after download or installation, you can al
 * `gcc -Wall almon.m -o almon -lobjc -framework Cocoa`
   * alternative: use prebuilt CLI `almon` (built with Xcode 10 on macOS 10.13.6)
 * `cp almon /usr/local/bin/almon && sudo chown root:wheel /usr/local/bin/almon && sudo chmod +ux /usr/local/bin/almon`
-* `cp almonwatch /usr/local/bin/almonwatch && sudo chown root:wheel /usr/local/bin/almonwatch && sudo chmod +ux /usr/local/bin/almonwatch`
-* `cp almhelper /usr/local/bin/almhelper && sudo chown root:wheel /usr/local/bin/almhelper && sudo chmod +ux /usr/local/bin/almhelper`
+* `cp almonwatch /usr/local/bin/almonwatch && sudo chown root:wheel /usr/local/bin/almonwatch && sudo chmod u+x /usr/local/bin/almonwatch`
+* `cp almhelper /usr/local/bin/almhelper && sudo chown root:wheel /usr/local/bin/almhelper && sudo chmod u+x /usr/local/bin/almhelper`
 * `sudo cp local.lcars.ALM.plist /Library/LaunchDaemons/local.lcars.ALM.plist`
 * `sudo cp local.lcars.ALMHelper.plist /Library/LaunchDaemons/local.lcars.ALMHelper.plist`
 * `sudo chown root:wheel /Library/LaunchDaemons/local.lcars.ALM.plist`
 * `sudo chown root:wheel /Library/LaunchDaemons/local.lcars.ALMHelper.plist`
-* `sudo launchctl load /Library/LaunchDameons/local.lcars.ALM.plist`
+* `sudo launchctl load /Library/LaunchDaemons/local.lcars.ALM.plist`
 * `sudo launchctl load /Library/LaunchDaemons/local.lcars.ALMHelper.plist` (this will automatically start ALM)
 
 Please note that when building `almon` with **Xcode 10** or the associated **Developer Tools** on High Sierra, you will probably run into `ld` warnings; you can safely ignore them.
